@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../figma/src"
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "PSMOBIL"
+	}
+}

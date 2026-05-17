@@ -1,0 +1,946 @@
+import { db, storage } from "./firebase-config.js";
+import {
+  GeoPoint,
+  Timestamp,
+  addDoc,
+  collection,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getDownloadURL,
+  ref as storageRef,
+  uploadBytes,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+const els = {
+  installBar: document.getElementById("installBar"),
+  installBtn: document.getElementById("installBtn"),
+  dismissInstallBtn: document.getElementById("dismissInstallBtn"),
+  statusBox: document.getElementById("statusBox"),
+  userChip: document.getElementById("userChip"),
+  authHint: document.getElementById("authHint"),
+  loginForm: document.getElementById("loginForm"),
+  loginEmail: document.getElementById("loginEmail"),
+  loginPassword: document.getElementById("loginPassword"),
+  registerForm: document.getElementById("registerForm"),
+  registerName: document.getElementById("registerName"),
+  registerEmail: document.getElementById("registerEmail"),
+  registerPassword: document.getElementById("registerPassword"),
+  logoutBtn: document.getElementById("logoutBtn"),
+  navItems: document.querySelectorAll(".nav-item"),
+  views: document.querySelectorAll("[data-view]"),
+  eventCount: document.getElementById("eventCount"),
+  eventSearch: document.getElementById("eventSearch"),
+  tagFilterAll: document.getElementById("tagFilterAll"),
+  tagFilterList: document.getElementById("tagFilterList"),
+  eventsList: document.getElementById("eventsList"),
+  locateBtn: document.getElementById("locateBtn"),
+  mapCanvas: document.getElementById("mapCanvas"),
+  fillLocationBtn: document.getElementById("fillLocationBtn"),
+  eventForm: document.getElementById("eventForm"),
+  eventTitle: document.getElementById("eventTitle"),
+  eventCategory: document.getElementById("eventCategory"),
+  eventCity: document.getElementById("eventCity"),
+  eventPlace: document.getElementById("eventPlace"),
+  eventDate: document.getElementById("eventDate"),
+  eventDescription: document.getElementById("eventDescription"),
+  eventLat: document.getElementById("eventLat"),
+  eventLng: document.getElementById("eventLng"),
+  eventCoordsHint: document.getElementById("eventCoordsHint"),
+  eventTags: document.getElementById("eventTags"),
+  reviewForm: document.getElementById("reviewForm"),
+  reviewEvent: document.getElementById("reviewEvent"),
+  reviewRatingStars: document.getElementById("reviewRatingStars"),
+  reviewRating: document.getElementById("reviewRating"),
+  reviewText: document.getElementById("reviewText"),
+  reviewVisited: document.getElementById("reviewVisited"),
+  authGrid: document.getElementById("authGrid"),
+  photoForm: document.getElementById("photoForm"),
+  photoEvent: document.getElementById("photoEvent"),
+  photoCaption: document.getElementById("photoCaption"),
+  photoFile: document.getElementById("photoFile"),
+  photoFileHint: document.getElementById("photoFileHint"),
+  photoPreview: document.getElementById("photoPreview"),
+  photoSubmitBtn: document.getElementById("photoSubmitBtn"),
+  reviewsList: document.getElementById("reviewsList"),
+  photosList: document.getElementById("photosList"),
+  profileName: document.getElementById("profileName"),
+  profileEmail: document.getElementById("profileEmail"),
+  profileEvents: document.getElementById("profileEvents"),
+  profileReviews: document.getElementById("profileReviews"),
+  profilePhotos: document.getElementById("profilePhotos"),
+  profileFavorites: document.getElementById("profileFavorites"),
+  favoritesList: document.getElementById("favoritesList"),
+};
+
+const FAVORITES_KEY = "psmobil-favorites";
+
+const DEMO_USER = {
+  uid: "student-demo-user",
+  email: "student@psmobil.app",
+  displayName: "Aplikacja Demo",
+};
+
+const state = {
+  user: DEMO_USER,
+  events: [],
+  reviews: [],
+  photos: [],
+  feedQuery: "",
+  feedTag: "",
+  map: null,
+  markerLayer: null,
+  currentLocation: null,
+  deferredPrompt: null,
+  favorites: loadFavorites(),
+};
+
+
+
+
+function loadFavorites() {
+  try {
+    const raw = localStorage.getItem(FAVORITES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveFavorites() {
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(state.favorites));
+}
+
+function isFavorite(eventId) {
+  return state.favorites.includes(eventId);
+}
+
+function toggleFavorite(eventId) {
+  if (isFavorite(eventId)) {
+    state.favorites = state.favorites.filter((id) => id !== eventId);
+  } else {
+    state.favorites = [...state.favorites, eventId];
+  }
+
+  saveFavorites();
+  renderFavorites();
+  renderProfile();
+  renderEvents();
+}
+
+
+
+function formatDate(value) {
+  if (!value) return "Brak daty";
+
+  return new Intl.DateTimeFormat("pl-PL", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(value);
+}
+
+function getEventDate(value) {
+  if (!value) return null;
+
+  if (typeof value.toDate === "function") {
+    return value.toDate();
+  }
+
+  return value instanceof Date ? value : new Date(value);
+}
+
+function getDistanceKm(aLat, aLng, bLat, bLng) {
+  const r = 6371;
+  const toRad = (n) => (n * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const aa =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * r * Math.atan2(Math.sqrt(aa), Math.sqrt(1 - aa));
+}
+
+function getCategoryLabel(value) {
+  const labels = {
+    koncert: "Koncert",
+    sport: "Sport",
+    kultura: "Kultura",
+    food: "Jedzenie",
+    spotkanie: "Spotkanie",
+    inne: "Inne",
+  };
+
+  return labels[value] || "Inne";
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function showStatus(message, tone = "neutral") {
+  els.statusBox.textContent = message;
+  els.statusBox.classList.remove("success", "error");
+
+  if (tone === "success") {
+    els.statusBox.classList.add("success");
+  }
+
+  if (tone === "error") {
+    els.statusBox.classList.add("error");
+  }
+}
+
+function vibrate(pattern = [40]) {
+  if (navigator.vibrate) {
+    navigator.vibrate(pattern);
+  }
+}
+
+function toggleAuthRequired(disabled) {
+  document.querySelectorAll(".auth-required").forEach((form) => {
+    form.classList.toggle("locked", disabled);
+    form.querySelectorAll("input, textarea, select, button").forEach((field) => {
+      field.disabled = disabled;
+    });
+  });
+}
+
+function toggleAuthForms(hidden) {
+  if (els.authGrid) {
+    els.authGrid.style.display = hidden ? "none" : "grid";
+  }
+}
+
+function setActiveView(viewId) {
+  els.views.forEach((view) => view.classList.toggle("active", view.id === viewId));
+  els.navItems.forEach((button) => button.classList.toggle("active", button.dataset.target === viewId));
+
+  if (viewId === "view-map") {
+    setTimeout(() => {
+      ensureMap();
+      state.map.invalidateSize();
+      updateMapMarkers();
+    }, 120);
+  }
+}
+
+function ensureMap() {
+  if (state.map) return;
+
+  const center = state.currentLocation
+    ? [state.currentLocation.latitude, state.currentLocation.longitude]
+    : [52.2297, 21.0122];
+
+  state.map = L.map("mapCanvas", { zoomControl: true }).setView(center, 12);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap",
+  }).addTo(state.map);
+  state.markerLayer = L.layerGroup().addTo(state.map);
+}
+
+function updateMapMarkers() {
+  if (!state.map || !state.markerLayer) return;
+
+  state.markerLayer.clearLayers();
+
+  const bounds = [];
+
+  state.events.forEach((event) => {
+    const lat = event.coordinates?.latitude;
+    const lng = event.coordinates?.longitude;
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    const marker = L.marker([lat, lng]).addTo(state.markerLayer);
+    marker.bindPopup(`
+      <strong>${event.Title}</strong><br>
+      ${event.city}, ${event.place}<br>
+      ${formatDate(event.eventDate)}
+    `);
+    bounds.push([lat, lng]);
+  });
+
+  if (state.currentLocation) {
+    const userMarker = L.circleMarker(
+      [state.currentLocation.latitude, state.currentLocation.longitude],
+      {
+        radius: 10,
+        color: "#0f766e",
+        fillColor: "#14b8a6",
+        fillOpacity: 0.95,
+      },
+    ).addTo(state.markerLayer);
+    userMarker.bindPopup("Twoja lokalizacja");
+    bounds.push([state.currentLocation.latitude, state.currentLocation.longitude]);
+  }
+
+  if (bounds.length > 0) {
+    state.map.fitBounds(bounds, { padding: [30, 30] });
+  }
+}
+
+function renderEventOptions() {
+  const sorted = [...state.events].sort((a, b) => {
+    const dateA = getEventDate(a.eventDate)?.getTime() || 0;
+    const dateB = getEventDate(b.eventDate)?.getTime() || 0;
+    return dateA - dateB;
+  });
+
+  const options = sorted.length
+    ? sorted
+        .map(
+          (event) => `
+            <option value="${escapeHtml(event.id)}">${escapeHtml(event.Title)} - ${escapeHtml(event.city)}</option>
+          `,
+        )
+        .join("")
+    : '<option value="">Najpierw dodaj wydarzenie</option>';
+
+  els.reviewEvent.innerHTML = options;
+  els.photoEvent.innerHTML = options;
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getEventImage(eventId) {
+  const photo = [...state.photos]
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+    .find((item) => item.eventId === eventId && item.imageUrl);
+
+  return photo?.imageUrl || "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=1200&q=80";
+}
+
+function renderFeedTags(upcoming) {
+  if (!els.tagFilterList || !els.tagFilterAll) return;
+
+  const tags = [...new Set(upcoming.flatMap((event) => (Array.isArray(event.tags) ? event.tags : [])))]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "pl"));
+
+  els.tagFilterAll.classList.toggle("active", !state.feedTag);
+  els.tagFilterList.innerHTML = tags.length
+    ? tags
+        .map(
+          (tag) => `<button type="button" class="pill pill-btn ${state.feedTag === tag ? "active" : ""}" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`,
+        )
+        .join("")
+    : '<span class="muted-text">Brak tagów do filtrowania</span>';
+}
+
+function getReviewsForEvent(eventId, limit = 2) {
+  return [...state.reviews]
+    .filter((review) => review.eventId === eventId)
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+    .slice(0, limit);
+}
+
+function renderEvents() {
+  const now = new Date();
+  const search = normalizeText(state.feedQuery);
+  const eventsWithDate = state.events
+    .map((event) => ({ ...event, dateObj: getEventDate(event.eventDate) }))
+    .filter((event) => event.dateObj && event.dateObj >= now);
+
+  const upcoming = eventsWithDate
+    .filter((event) => {
+      const tags = Array.isArray(event.tags) ? event.tags : [];
+      const tagMatch = !state.feedTag || tags.some((tag) => tag === state.feedTag);
+      const searchable = normalizeText([event.Title, event.city, event.place, event.description, ...tags].join(" "));
+      const queryMatch = !search || searchable.includes(search);
+      return tagMatch && queryMatch;
+    })
+    .sort((a, b) => a.dateObj - b.dateObj);
+
+  els.eventCount.textContent = String(upcoming.length);
+
+  renderFeedTags(eventsWithDate);
+
+  if (upcoming.length === 0) {
+    els.eventsList.innerHTML = `
+      <div class="empty-state">
+        <strong>Brak wydarzeń do pokazania</strong>
+        <p class="muted-text mb-0">Spróbuj zmienić wyszukiwanie lub filtr tagów.</p>
+      </div>
+    `;
+    return;
+  }
+
+  els.eventsList.innerHTML = upcoming
+    .map((event) => {
+      const tags = Array.isArray(event.tags) ? event.tags : [];
+      const reviews = getReviewsForEvent(event.id, 2);
+      const reviewCount = state.reviews.filter((review) => review.eventId === event.id).length;
+      const distance =
+        state.currentLocation && event.coordinates?.latitude && event.coordinates?.longitude
+          ? getDistanceKm(
+              state.currentLocation.latitude,
+              state.currentLocation.longitude,
+              event.coordinates.latitude,
+              event.coordinates.longitude,
+            ).toFixed(1)
+          : null;
+
+      return `
+        <article class="event-card" id="event-${escapeHtml(event.id)}">
+          <div class="event-photo-wrap">
+            <img class="event-photo" src="${escapeHtml(getEventImage(event.id))}" alt="Zdjęcie wydarzenia ${escapeHtml(event.Title)}">
+          </div>
+          <div class="event-top">
+            <div>
+              <div class="event-title">${escapeHtml(event.Title)}</div>
+              <div class="muted-text">${escapeHtml(event.city)} • ${escapeHtml(event.place)}</div>
+            </div>
+            <span class="badge-inline">${escapeHtml(getCategoryLabel(event.category))}</span>
+          </div>
+
+          <div class="event-meta">
+            <span><i class="bi bi-calendar-event"></i> ${escapeHtml(formatDate(event.dateObj))}</span>
+            ${distance ? `<span><i class="bi bi-geo"></i> ${distance} km od Ciebie</span>` : ""}
+          </div>
+
+          <p class="mb-0">${escapeHtml(event.description)}</p>
+
+          <div class="pill-row">
+            ${(tags.length ? tags : ["wydarzenie"]).map((tag) => `<span class="pill">${escapeHtml(tag)}</span>`).join("")}
+          </div>
+
+          <div class="event-actions">
+            <button class="btn-soft btn-share" type="button" data-review-event="${escapeHtml(event.id)}">
+              <i class="bi bi-chat-square-heart"></i> Napisz opinię
+            </button>
+            <button class="btn-soft btn-favorite ${isFavorite(event.id) ? "active" : ""}" type="button" data-favorite-event="${escapeHtml(event.id)}" aria-pressed="${isFavorite(event.id) ? "true" : "false"}">
+              <i class="bi ${isFavorite(event.id) ? "bi-heart-fill" : "bi-heart"}"></i>
+              ${isFavorite(event.id) ? "Ulubione" : "Do ulubionych"}
+            </button>
+          </div>
+
+          <div class="event-reviews">
+            <div class="event-reviews-head">
+              <strong>Opinie</strong>
+              <span class="muted-text">${reviewCount} ${reviewCount === 1 ? "opinia" : "opinii"}</span>
+            </div>
+            ${
+              reviews.length
+                ? reviews
+                    .map(
+                      (review) => `
+                        <article class="event-review">
+                          <div class="event-review-top">
+                            <strong>${escapeHtml(review.authorName || "Anonim")}</strong>
+                            <span class="badge-inline">${escapeHtml(review.rating)}/5</span>
+                          </div>
+                          <p class="mb-1">${escapeHtml(review.text)}</p>
+                          <small class="muted-text">${escapeHtml(review.visited ? "Uczestnik wydarzenia" : "Opinia zdalna")}</small>
+                        </article>
+                      `,
+                    )
+                    .join("")
+                : '<p class="muted-text mb-0">Brak opinii. Bądź pierwszą osobą, która je doda.</p>'
+            }
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+  els.eventsList.querySelectorAll("[data-review-event]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!els.reviewEvent || !els.reviewForm) return;
+
+      els.reviewEvent.value = button.dataset.reviewEvent;
+      setActiveView("view-feed");
+      els.reviewForm.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+
+  els.eventsList.querySelectorAll("[data-favorite-event]").forEach((button) => {
+    button.addEventListener("click", () => {
+      toggleFavorite(button.dataset.favoriteEvent);
+    });
+  });
+
+}
+
+function renderFavorites() {
+  if (!els.favoritesList) return;
+
+  const favoriteEvents = state.favorites
+    .map((eventId) => state.events.find((event) => event.id === eventId))
+    .filter(Boolean)
+    .sort((a, b) => {
+      const dateA = getEventDate(a.eventDate)?.getTime() || 0;
+      const dateB = getEventDate(b.eventDate)?.getTime() || 0;
+      return dateA - dateB;
+    });
+
+  if (favoriteEvents.length === 0) {
+    els.favoritesList.innerHTML = '<p class="muted-text mb-0">Nie masz jeszcze żadnych ulubionych wydarzeń.</p>';
+    return;
+  }
+
+  els.favoritesList.innerHTML = favoriteEvents
+    .map((event) => `
+      <article class="favorite-item">
+        <div>
+          <strong>${escapeHtml(event.Title)}</strong>
+          <div class="muted-text">${escapeHtml(event.city)} • ${escapeHtml(formatDate(getEventDate(event.eventDate)))}</div>
+        </div>
+        <button class="btn-soft btn-favorite active" type="button" data-favorite-event="${escapeHtml(event.id)}">
+          <i class="bi bi-heart-fill"></i> Usuń
+        </button>
+      </article>
+    `)
+    .join("");
+
+  els.favoritesList.querySelectorAll("[data-favorite-event]").forEach((button) => {
+    button.addEventListener("click", () => {
+      toggleFavorite(button.dataset.favoriteEvent);
+    });
+  });
+}
+
+function renderReviews() {
+  const eventById = new Map(state.events.map((event) => [event.id, event]));
+  const latest = [...state.reviews]
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+    .slice(0, 5);
+
+  if (latest.length === 0) {
+    els.reviewsList.innerHTML = `
+      <div class="empty-state">
+        <p class="mb-0 muted-text">Jeszcze nie ma opinii.</p>
+      </div>
+    `;
+    return;
+  }
+
+  els.reviewsList.innerHTML = latest
+    .map((review) => {
+      const event = eventById.get(review.eventId);
+      return `
+        <article class="review-card">
+          <div class="review-head">
+            <strong>${escapeHtml(review.authorName || "Anonim")}</strong>
+            <span class="badge-inline">${escapeHtml(review.rating)}/5</span>
+          </div>
+          <div class="muted-text mb-2">${escapeHtml(event ? event.Title : "Nieznane wydarzenie")}</div>
+          <p class="mb-2">${escapeHtml(review.text)}</p>
+          <small class="muted-text">${escapeHtml(review.visited ? "Uczestnik wydarzenia" : "Opinia zdalna")} • ${escapeHtml(review.createdAt?.toDate ? formatDate(review.createdAt.toDate()) : "")}</small>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderPhotos() {
+  const eventById = new Map(state.events.map((event) => [event.id, event]));
+  const latest = [...state.photos]
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+    .slice(0, 5);
+
+  if (latest.length === 0) {
+    els.photosList.innerHTML = `
+      <div class="empty-state">
+        <p class="mb-0 muted-text">Brak zdjęć w galerii.</p>
+      </div>
+    `;
+    return;
+  }
+
+  els.photosList.innerHTML = latest
+    .map((photo) => {
+      const event = eventById.get(photo.eventId);
+      return `
+        <article class="photo-card">
+          <div class="photo-head">
+            <strong>${escapeHtml(photo.authorName || "Anonim")}</strong>
+            <span class="badge-inline"><i class="bi bi-image"></i> ${escapeHtml(event ? event.Title : "Zdjęcie")}</span>
+          </div>
+          <p class="muted-text mb-2">${escapeHtml(photo.caption)}</p>
+          <img src="${escapeHtml(photo.imageUrl)}" alt="Zdjęcie z wydarzenia ${escapeHtml(event ? event.Title : "")}">
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderProfile() {
+  els.profileName.textContent = state.user.displayName || "Użytkownik BędęTam";
+  els.profileEmail.textContent = state.user.email || "Brak adresu e-mail";
+  els.profileEvents.textContent = String(state.events.filter((event) => event.authorId === state.user.uid).length);
+  els.profileReviews.textContent = String(state.reviews.filter((review) => review.authorId === state.user.uid).length);
+  els.profilePhotos.textContent = String(state.photos.filter((photo) => photo.authorId === state.user.uid).length);
+  if (els.profileFavorites) {
+    els.profileFavorites.textContent = String(state.favorites.length);
+  }
+}
+
+function renderAll() {
+  renderEventOptions();
+  renderEvents();
+  renderReviews();
+  renderPhotos();
+  renderFavorites();
+  renderProfile();
+  updateMapMarkers();
+}
+
+async function saveProfile(user, displayName) {
+  const profileRef = doc(db, "profiles", user.uid);
+  const profileData = {
+    uid: user.uid,
+    email: user.email,
+    displayName: displayName || user.displayName || user.email?.split("@")[0] || "Użytkownik",
+    lastLoginAt: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    providerIds: user.providerData.map((provider) => provider.providerId),
+  };
+
+  await setDoc(profileRef, profileData, { merge: true });
+}
+
+async function fillCurrentLocation(targetLatInput, targetLngInput) {
+  if (!navigator.geolocation) {
+    showStatus("Ta przeglądarka nie obsługuje geolokalizacji.", "error");
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const { latitude, longitude } = position.coords;
+      state.currentLocation = { latitude, longitude };
+
+      if (targetLatInput && targetLngInput) {
+        targetLatInput.value = latitude.toFixed(6);
+        targetLngInput.value = longitude.toFixed(6);
+      }
+
+      if (els.eventCoordsHint) {
+        els.eventCoordsHint.textContent = `Zapisano współrzędne: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+      }
+
+      if (state.map) {
+        state.map.setView([latitude, longitude], 13);
+        updateMapMarkers();
+      }
+
+      renderEvents();
+      showStatus("Pobrano bieżącą lokalizację GPS.", "success");
+      vibrate([50, 30, 50]);
+    },
+    () => {
+      showStatus("Nie udało się pobrać lokalizacji. Sprawdź uprawnienia GPS.", "error");
+    },
+    { enableHighAccuracy: true, timeout: 10000 },
+  );
+}
+
+async function uploadPhoto(file, path) {
+  const fileRef = storageRef(storage, path);
+  await uploadBytes(fileRef, file);
+  return await getDownloadURL(fileRef);
+}
+
+function updatePhotoPreview() {
+  const file = els.photoFile?.files?.[0];
+
+  if (!file) {
+    if (els.photoFileHint) {
+      els.photoFileHint.textContent = "Nie wybrano pliku.";
+    }
+
+    if (els.photoPreview) {
+      els.photoPreview.src = "";
+      els.photoPreview.classList.add("hidden");
+    }
+
+    return;
+  }
+
+  if (els.photoFileHint) {
+    els.photoFileHint.textContent = `${file.name} • ${(file.size / 1024 / 1024).toFixed(2)} MB`;
+  }
+
+  if (els.photoPreview) {
+    els.photoPreview.src = URL.createObjectURL(file);
+    els.photoPreview.classList.remove("hidden");
+  }
+}
+
+els.navItems.forEach((button) => {
+  button.addEventListener("click", () => setActiveView(button.dataset.target));
+});
+
+if (els.eventSearch) {
+  els.eventSearch.addEventListener("input", () => {
+    state.feedQuery = els.eventSearch.value;
+    renderEvents();
+  });
+}
+
+if (els.tagFilterAll) {
+  els.tagFilterAll.addEventListener("click", () => {
+    state.feedTag = "";
+    renderEvents();
+  });
+}
+
+if (els.tagFilterList) {
+  els.tagFilterList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-tag]");
+    if (!button) return;
+
+    state.feedTag = button.dataset.tag;
+    renderEvents();
+  });
+}
+
+if (els.photoFile) {
+  els.photoFile.addEventListener("change", updatePhotoPreview);
+}
+
+els.loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  
+  els.loginForm.reset();
+  toggleAuthForms(true);
+  showStatus("Zalogowano do aplikacji demo.", "success");
+  vibrate([30]);
+});
+
+els.registerForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  
+  els.registerForm.reset();
+  toggleAuthForms(true);
+  showStatus("Zalogowano do aplikacji demo.", "success");
+  vibrate([40, 20, 40]);
+});
+
+els.logoutBtn.addEventListener("click", () => {
+  showStatus("Demo aplikacja - wylogowanie niedostępne.", "info");
+});
+
+els.fillLocationBtn.addEventListener("click", () => {
+  fillCurrentLocation(els.eventLat, els.eventLng);
+});
+
+els.locateBtn.addEventListener("click", () => {
+  ensureMap();
+  fillCurrentLocation();
+});
+
+els.installBtn.addEventListener("click", async () => {
+  if (!state.deferredPrompt) return;
+
+  state.deferredPrompt.prompt();
+  await state.deferredPrompt.userChoice;
+  state.deferredPrompt = null;
+  els.installBar.classList.add("hidden");
+});
+
+els.dismissInstallBtn.addEventListener("click", () => {
+  els.installBar.classList.add("hidden");
+});
+
+els.eventForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!state.user) {
+    showStatus("Najpierw zaloguj się, żeby dodać wydarzenie.", "error");
+    return;
+  }
+
+  try {
+    const eventDate = new Date(els.eventDate.value);
+    const latitude = Number(els.eventLat.value);
+    const longitude = Number(els.eventLng.value);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      showStatus("Użyj GPS, żeby ustawić lokalizację wydarzenia.", "error");
+      return;
+    }
+
+    await addDoc(collection(db, "events"), {
+      Title: els.eventTitle.value.trim(),
+      category: els.eventCategory.value,
+      city: els.eventCity.value.trim(),
+      place: els.eventPlace.value.trim(),
+      description: els.eventDescription.value.trim(),
+      eventDate: Timestamp.fromDate(eventDate),
+      coordinates: new GeoPoint(latitude, longitude),
+      tags: els.eventTags.value
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+      authorId: state.user.uid,
+      authorName: state.user.displayName || state.user.email || "Użytkownik",
+    });
+
+    els.eventForm.reset();
+    showStatus("Wydarzenie zapisane.", "success");
+    vibrate([60, 40, 60]);
+  } catch (error) {
+    showStatus(`Nie udało się zapisać wydarzenia: ${error.message}`, "error");
+  }
+});
+
+if (els.reviewRatingStars) {
+  const starBtns = els.reviewRatingStars.querySelectorAll(".star-btn");
+  starBtns.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const rating = parseInt(btn.dataset.rating);
+      els.reviewRating.value = rating;
+
+      starBtns.forEach((b) => {
+        const bRating = parseInt(b.dataset.rating);
+        const icon = b.querySelector("i");
+        if (bRating <= rating) {
+          icon.classList.remove("bi-star");
+          icon.classList.add("bi-star-fill");
+        } else {
+          icon.classList.remove("bi-star-fill");
+          icon.classList.add("bi-star");
+        }
+      });
+    });
+  });
+}
+
+els.reviewForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!state.user) {
+    showStatus("Najpierw zaloguj się, żeby dodać opinię.", "error");
+    return;
+  }
+
+  try {
+    await addDoc(collection(db, "reviews"), {
+      eventId: els.reviewEvent.value,
+      rating: Number(els.reviewRating.value),
+      text: els.reviewText.value.trim(),
+      visited: els.reviewVisited.checked,
+      authorId: state.user.uid,
+      authorName: state.user.displayName || state.user.email || "Użytkownik",
+      createdAt: serverTimestamp(),
+    });
+
+    els.reviewForm.reset();
+    els.reviewVisited.checked = true;
+    showStatus("Opinia została zapisana.", "success");
+    vibrate([40]);
+  } catch (error) {
+    showStatus(`Nie udało się zapisać opinii: ${error.message}`, "error");
+  }
+});
+
+els.photoForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!state.user) {
+    showStatus("Najpierw zaloguj się, żeby dodać zdjęcie.", "error");
+    return;
+  }
+
+  const file = els.photoFile.files[0];
+
+  if (!file) {
+    showStatus("Wybierz plik zdjęcia.", "error");
+    return;
+  }
+
+  try {
+    if (els.photoSubmitBtn) {
+      els.photoSubmitBtn.disabled = true;
+      els.photoSubmitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Wysyłanie...';
+    }
+
+    showStatus("Wysyłam zdjęcie...", "success");
+
+      const storagePath = `event-photos/${state.user.uid}/${Date.now()}-${file.name}`;
+      const imageUrl = await uploadPhoto(file, storagePath);
+
+    showStatus("Zapisuję zdjęcie w aplikacji...", "success");
+
+      await addDoc(collection(db, "photos"), {
+        eventId: els.photoEvent.value,
+        caption: els.photoCaption.value.trim(),
+        imageUrl,
+        storagePath,
+        authorId: state.user.uid,
+        authorName: state.user.displayName || state.user.email || "Użytkownik",
+        createdAt: serverTimestamp(),
+      });
+
+    els.photoForm.reset();
+    updatePhotoPreview();
+    showStatus("Zdjęcie zostało wysłane.", "success");
+    vibrate([45, 25, 45]);
+  } catch (error) {
+    showStatus(`Nie udało się wysłać zdjęcia: ${error.message}`, "error");
+  } finally {
+    if (els.photoSubmitBtn) {
+      els.photoSubmitBtn.disabled = false;
+      els.photoSubmitBtn.textContent = "Wyślij zdjęcie";
+    }
+  }
+});
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  state.deferredPrompt = event;
+  els.installBar.classList.remove("hidden");
+});
+
+window.addEventListener("load", () => {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch((error) => {
+      console.warn("Service worker registration failed:", error);
+    });
+  }
+});
+
+// Aplikacja demo - automatycznie zalogowany
+els.userChip.textContent = state.user.displayName;
+els.authHint.textContent = "Zalogowano do aplikacji demo";
+toggleAuthRequired(false);
+toggleAuthForms(true);
+
+onSnapshot(query(collection(db, "events"), orderBy("eventDate", "asc")), (snapshot) => {
+  state.events = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+  renderAll();
+});
+
+onSnapshot(query(collection(db, "reviews"), orderBy("createdAt", "desc")), (snapshot) => {
+  state.reviews = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+  renderAll();
+});
+
+onSnapshot(query(collection(db, "photos"), orderBy("createdAt", "desc")), (snapshot) => {
+  state.photos = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+  renderAll();
+});
+
+showStatus("Ładuję wydarzenia i opinie z Firebase...");
+// Formularze od razu dostępne
+toggleAuthRequired(false);
+toggleAuthForms(true);
+renderAll();

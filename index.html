@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f766e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>BędęTam</title>
+    <link rel="manifest" href="manifest.json" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="installBar" class="install-bar hidden" aria-live="polite">
+      <span><i class="bi bi-download"></i> Zainstaluj BędęTam na telefonie</span>
+      <div class="install-actions">
+        <button id="installBtn" class="btn-soft" type="button">Instaluj</button>
+        <button id="dismissInstallBtn" class="btn-icon" type="button" aria-label="Ukryj">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+    </div>
+
+    <main class="app-shell">
+      <header class="hero card-surface">
+        <div class="hero-copy">
+          <p class="eyebrow">PWA • SPA • Firebase</p>
+          <h1>BędęTam</h1>
+          <p class="hero-text">
+            Aplikacja do dzielenia się wydarzeniami w okolicy, z mapą, opiniami i zdjęciami z wyjść.
+          </p>
+        </div>
+        <div class="hero-badge">
+          <span id="userChip">Gość</span>
+          <small id="authHint">Zaloguj się, żeby dodawać wydarzenia</small>
+        </div>
+      </header>
+
+      <section id="statusBox" class="status-box card-surface" aria-live="polite">
+        Gotowe do pracy. Włącz logowanie, aby korzystać z formularzy.
+      </section>
+
+      <section class="card-surface auth-panel" aria-labelledby="authTitle">
+        <div class="section-head">
+          <h2 id="authTitle">Logowanie</h2>
+          <button id="logout_btn" class="btn-soft" type="button">Wyloguj</button>
+        </div>
+
+        <div id="auth_grid" class="auth-grid">
+          <form id="login_form" class="auth-form">
+            <h3>Witamy ponownie</h3>
+            <label class="field">
+              <span>Email</span>
+              <input name="email" type="email" required placeholder="np. ola@example.com" />
+            </label>
+            <label class="field">
+              <span>Hasło</span>
+              <input name="password" type="password" required placeholder="Twoje hasło" />
+            </label>
+            <button class="btn-primary" type="submit">Zaloguj się</button>
+            <button id="google_login_btn" class="btn-soft" type="button">
+              <i class="bi bi-google"></i> Zaloguj się przez Google
+            </button>
+          </form>
+
+          <form id="register_form" class="auth-form">
+            <h3>Załóż konto</h3>
+            <label class="field">
+              <span>Email</span>
+              <input name="email" type="email" required placeholder="np. ola@example.com" />
+            </label>
+            <label class="field">
+              <span>Hasło</span>
+              <input name="password" type="password" minlength="6" required placeholder="min. 6 znaków" />
+            </label>
+            <button class="btn-primary" type="submit">Utwórz konto</button>
+          </form>
+        </div>
+
+      </section>
+
+      <section class="view active" id="view-feed" data-view>
+        <div class="section-head">
+          <h2>Nadchodzące wydarzenia</h2>
+          <span id="event_count" class="count-badge">0</span>
+        </div>
+        <div class="feed-tools card-surface">
+          <label class="field feed-search">
+            <span>Szukaj</span>
+            <input id="event_search" type="search" placeholder="Szukaj po nazwie, miejscu lub tagach" />
+          </label>
+        </div>
+        <form id="review_form" class="card-form auth-required feed-review-form">
+          <h3>Dodaj opinię do wydarzenia</h3>
+          <label class="field">
+            <span>Wydarzenie</span>
+            <select id="review_event" required></select>
+          </label>
+          <label class="field">
+            <span>Ocena</span>
+            <div id="review_rating_stars" class="rating-stars">
+              <button type="button" class="star-btn" data-rating="1" title="1 - bardzo słabo">
+                <i class="bi bi-star"></i>
+              </button>
+              <button type="button" class="star-btn" data-rating="2" title="2 - słabo">
+                <i class="bi bi-star"></i>
+              </button>
+              <button type="button" class="star-btn" data-rating="3" title="3 - poprawnie">
+                <i class="bi bi-star"></i>
+              </button>
+              <button type="button" class="star-btn" data-rating="4" title="4 - bardzo dobrze">
+                <i class="bi bi-star"></i>
+              </button>
+              <button type="button" class="star-btn" data-rating="5" title="5 - świetnie">
+                <i class="bi bi-star"></i>
+              </button>
+            </div>
+            <input id="review_rating" type="hidden" value="5" required />
+          </label>
+          <label class="field">
+            <span>Twoja opinia</span>
+            <textarea id="review_text" rows="4" required placeholder="Co było dobre, co można poprawić?"></textarea>
+          </label>
+          <label class="toggle-row">
+            <input id="review_visited" type="checkbox" checked />
+            <span>Byłem/am na wydarzeniu</span>
+          </label>
+          <button class="btn-primary" type="submit">Zapisz opinię</button>
+        </form>
+        <div id="events_list" class="stack-list"></div>
+      </section>
+
+      <section class="view" id="view-map" data-view>
+        <div class="section-head">
+          <h2>Mapa wydarzeń</h2>
+          <button id="locate_btn" class="btn-soft" type="button">Moja lokalizacja</button>
+        </div>
+        <p class="section-note">
+          Mapa pokazuje pinezki wydarzeń oraz Twoją bieżącą pozycję, jeśli zezwolisz na GPS.
+        </p>
+        <div id="map_canvas" class="map-box"></div>
+      </section>
+
+      <section class="view" id="view-add" data-view>
+        <div class="section-head">
+          <h2>Dodaj wydarzenie</h2>
+        </div>
+
+        <form id="event_form" class="card-form auth-required">
+          <div class="form-grid">
+            <label class="field">
+              <span>Nazwa wydarzenia</span>
+              <input id="event_title" type="text" required placeholder="np. Kino plenerowe" />
+            </label>
+            <label class="field">
+              <span>Kategoria</span>
+              <select id="event_category" required>
+                <option value="koncert">Koncert</option>
+                <option value="sport">Sport</option>
+                <option value="kultura">Kultura</option>
+                <option value="food">Jedzenie</option>
+                <option value="spotkanie">Spotkanie</option>
+                <option value="inne">Inne</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Miasto</span>
+              <input id="event_city" type="text" required placeholder="np. Kraków" />
+            </label>
+            <label class="field">
+              <span>Miejsce</span>
+              <input id="event_place" type="text" required placeholder="" />
+            </label>
+            <label class="field">
+              <span>Data i godzina</span>
+              <input id="event_date" type="datetime-local" required />
+            </label>
+            <label class="field field-wide">
+              <span>Opis</span>
+              <textarea id="event_description" rows="4" required placeholder="Krótki opis wydarzenia"></textarea>
+            </label>
+            
+            <label class="field">
+                
+
+              <span>Szerokość geograficzna</span>
+              <input id="event_lat" type="number" step="0.000001" placeholder="np. 52.229675" required />
+            </label>
+            <label class="field">
+              <span>Długość geograficzna</span>
+              <input id="event_lng" type="number" step="0.000001" placeholder="np. 21.012230" required />
+            </label>
+            <button id="fill_location_btn" class="btn-soft" type="button">Użyj GPS</button>
+            <label class="field field-wide">
+              <span>Tagi, oddziel przecinkami</span>
+              <input id="event_tags" type="text" placeholder="muzyka, wieczór, centrum" />
+            </label>
+          </div>
+
+          <button class="btn-primary" type="submit">Dodaj wydarzenie</button>
+        </form>
+      </section>
+
+      <section class="view" id="view-relations" data-view>
+        <div class="section-head">
+          <h2>Zdjęcia wydarzeń</h2>
+          <span class="section-note-inline">Feed zdjęć w stylu social media.</span>
+        </div>
+
+    
+        </div>
+
+        <div class="split-stack photo-stack">
+          <form id="photo_form" class="card-form auth-required">
+            <h3>Dodaj zdjęcie</h3>
+            <label class="field">
+              <span>Wydarzenie</span>
+              <select id="photo_event" required></select>
+            </label>
+            <label class="field">
+              <span>Opis zdjęcia</span>
+              <input id="photo_caption" type="text" required placeholder="np. Scena przed koncertem" />
+            </label>
+            <label class="field">
+              <span>Plik zdjęcia</span>
+              <input id="photo_file" class="file-input" type="file" accept="image/*" capture="environment" required />
+            </label>
+            <img id="photo_preview" class="photo-preview hidden" alt="Podgląd wybranego zdjęcia" />
+            <button id="photo_submit_btn" class="btn-primary" type="submit">Wyślij zdjęcie</button>
+          </form>
+        </div>
+
+        <div class="media-grid">
+          <section class="mini-panel">
+            <div class="section-head compact">
+              <h3>Ostatnie opinie</h3>
+            </div>
+            <div id="reviews_list" class="stack-list small"></div>
+          </section>
+
+          <section class="mini-panel">
+            <div class="section-head compact">
+              <h3>Ostatnie zdjęcia</h3>
+            </div>
+            <div id="photos_list" class="stack-list small"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="view-account" data-view>
+        <div class="section-head">
+          <h2>Konto</h2>
+        </div>
+
+        <div class="card-surface profile-card">
+          <p class="profile-label">Zalogowany użytkownik</p>
+          <h3 id="profile_name">Brak sesji</h3>
+          <p id="profile_email" class="muted-text">Zaloguj się, aby zobaczć dane profilu.</p>
+          <div class="profile-grid">
+            <div>
+              <span class="profile-meta">wydarzenia</span>
+              <strong id="profile_events">0</strong>
+            </div>
+            <div>
+              <span class="profile-meta">Opinie</span>
+              <strong id="profile_reviews">0</strong>
+            </div>
+            <div>
+              <span class="profile-meta">Zdjęcia</span>
+              <strong id="profile_photos">0</strong>
+            </div>
+            <div>
+              <span class="profile-meta">Ulubione</span>
+              <strong id="profile_favorites">0</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-surface profile-card">
+          <div class="section-head compact">
+            <h3>Ulubione wydarzenia</h3>
+          </div>
+          <div id="favorites_list" class="stack-list small"></div>
+        </div>
+      </section>
+
+      <nav class="bottom-nav card-surface" aria-label="Nawigacja główna">
+        <button class="nav-item active" data-target="view-feed" type="button">
+          <i class="bi bi-list-ul"></i>
+          <span>Lista</span>
+        </button>
+        <button class="nav-item" data-target="view-map" type="button">
+          <i class="bi bi-geo-alt"></i>
+          <span>Mapa</span>
+        </button>
+        <button class="nav-item" data-target="view-add" type="button">
+          <i class="bi bi-plus-circle"></i>
+          <span>Dodaj</span>
+        </button>
+        <button class="nav-item" data-target="view-relations" type="button">
+          <i class="bi bi-chat-square-heart"></i>
+          <span>Relacje</span>
+        </button>
+        <button class="nav-item" data-target="view-account" type="button">
+          <i class="bi bi-person"></i>
+          <span>Konto</span>
+        </button>
+      </nav>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
