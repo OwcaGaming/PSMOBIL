@@ -715,11 +715,20 @@ button {
   }
 
   .bottom-nav {
-    grid-template-columns: repeat(3, 1fr);
+    width: calc(100% - 12px);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+    padding: 8px;
   }
 
-  .bottom-nav .nav-item:nth-child(n + 4) {
-    display: none;
+  .nav-item {
+    padding: 8px 2px;
+    gap: 2px;
+    font-size: 0.72rem;
+  }
+
+  .nav-item i {
+    font-size: 0.95rem;
   }
 
   .profile-grid {

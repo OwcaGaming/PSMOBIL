@@ -8,7 +8,7 @@ export function ensureMap() {
     ? [state.currentLocation.latitude, state.currentLocation.longitude]
     : [52.2297, 21.0122];
 
-  state.map = L.map("mapCanvas", { zoomControl: true }).setView(center, 12);
+  state.map = L.map("map_canvas", { zoomControl: true }).setView(center, 12);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "&copy; OpenStreetMap",
   }).addTo(state.map);

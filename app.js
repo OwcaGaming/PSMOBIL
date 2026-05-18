@@ -17,7 +17,9 @@ function initialize() {
 
     state.user = loggedUser;
     els.userChip.textContent = loggedUser.displayName;
-    els.authHint.textContent = isLoggedIn ? "Zalogowano":
+    els.authHint.textContent = isLoggedIn
+      ? "Zalogowano"
+      : "Zaloguj się, żeby dodawać wydarzenia";
 
     if (els.authPanel) {
       els.authPanel.classList.toggle("hidden", isLoggedIn);

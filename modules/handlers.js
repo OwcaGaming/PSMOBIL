@@ -30,23 +30,27 @@ export function setupHandlers() {
     els.photoFile.addEventListener("change", updatePhotoPreview);
   }
 
-  els.loginForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    login(els.loginForm.email.value.trim(), els.loginForm.password.value.trim())
-      .then(() => {
-        els.loginForm.reset();
-      })
-      .catch(onError);
-  });
+  if (els.loginForm) {
+    els.loginForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      login(els.loginForm.email.value.trim(), els.loginForm.password.value.trim())
+        .then(() => {
+          els.loginForm.reset();
+        })
+        .catch(onError);
+    });
+  }
 
-  els.registerForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    register(els.registerForm.email.value.trim(), els.registerForm.password.value.trim())
-      .then(() => {
-        els.registerForm.reset();
-      })
-      .catch(onError);
-  });
+  if (els.registerForm) {
+    els.registerForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      register(els.registerForm.email.value.trim(), els.registerForm.password.value.trim())
+        .then(() => {
+          els.registerForm.reset();
+        })
+        .catch(onError);
+    });
+  }
 
   if (els.googleLoginBtn) {
     els.googleLoginBtn.addEventListener("click", () => {
@@ -62,60 +66,72 @@ export function setupHandlers() {
     });
   }
 
-  els.logoutBtn.addEventListener("click", () => {
-    logoutUser()
-      .catch(onError);
-  });
-
-  els.fillLocationBtn.addEventListener("click", () => {
-    fillCurrentLocation(els.eventLat, els.eventLng);
-  });
-
-  els.locateBtn.addEventListener("click", () => {
-    import("./map.js").then((module) => {
-      module.ensureMap();
-      fillCurrentLocation();
+  if (els.logoutBtn) {
+    els.logoutBtn.addEventListener("click", () => {
+      logoutUser()
+        .catch(onError);
     });
-  });
+  }
 
-  els.installBtn.addEventListener("click", () => {
-    if (!state.deferredPrompt) return;
+  if (els.fillLocationBtn) {
+    els.fillLocationBtn.addEventListener("click", () => {
+      fillCurrentLocation(els.eventLat, els.eventLng);
+    });
+  }
 
-    state.deferredPrompt.prompt();
-    state.deferredPrompt.userChoice.then(() => {
-      state.deferredPrompt = null;
+  if (els.locateBtn) {
+    els.locateBtn.addEventListener("click", () => {
+      import("./map.js").then((module) => {
+        module.ensureMap();
+        fillCurrentLocation();
+      });
+    });
+  }
+
+  if (els.installBtn) {
+    els.installBtn.addEventListener("click", () => {
+      if (!state.deferredPrompt) return;
+
+      state.deferredPrompt.prompt();
+      state.deferredPrompt.userChoice.then(() => {
+        state.deferredPrompt = null;
+        els.installBar.classList.add("hidden");
+      });
+    });
+  }
+
+  if (els.dismissInstallBtn) {
+    els.dismissInstallBtn.addEventListener("click", () => {
       els.installBar.classList.add("hidden");
     });
-  });
+  }
 
-  els.dismissInstallBtn.addEventListener("click", () => {
-    els.installBar.classList.add("hidden");
-  });
+  if (els.eventForm) {
+    els.eventForm.addEventListener("submit", (event) => {
+      event.preventDefault();
 
-  els.eventForm.addEventListener("submit", (event) => {
-    event.preventDefault();
+      if (state.user.uid === "guest") {
+        return;
+      }
 
-    if (state.user.uid === "guest") {
-      return;
-    }
-
-    saveEvent({
-      Title: els.eventTitle.value.trim(),
-      category: els.eventCategory.value,
-      city: els.eventCity.value.trim(),
-      place: els.eventPlace.value.trim(),
-      description: els.eventDescription.value.trim(),
-      eventDate: Timestamp.fromDate(new Date(els.eventDate.value)),
-      coordinates: new GeoPoint(Number(els.eventLat.value), Number(els.eventLng.value)),
-      tags: els.eventTags.value.split(",").map((tag) => tag.trim()).filter(Boolean),
-      authorId: state.user.uid,
-      authorName: state.user.displayName,
-    })
-      .then(() => {
-        els.eventForm.reset();
+      saveEvent({
+        Title: els.eventTitle.value.trim(),
+        category: els.eventCategory.value,
+        city: els.eventCity.value.trim(),
+        place: els.eventPlace.value.trim(),
+        description: els.eventDescription.value.trim(),
+        eventDate: Timestamp.fromDate(new Date(els.eventDate.value)),
+        coordinates: new GeoPoint(Number(els.eventLat.value), Number(els.eventLng.value)),
+        tags: els.eventTags.value.split(",").map((tag) => tag.trim()).filter(Boolean),
+        authorId: state.user.uid,
+        authorName: state.user.displayName,
       })
-      .catch(onError);
-  });
+        .then(() => {
+          els.eventForm.reset();
+        })
+        .catch(onError);
+    });
+  }
 
   if (els.reviewRatingStars) {
     const starBtns = els.reviewRatingStars.querySelectorAll(".star-btn");
@@ -142,48 +158,53 @@ export function setupHandlers() {
     });
   }
 
-  els.reviewForm.addEventListener("submit", (event) => {
-    event.preventDefault();
+  if (els.reviewForm) {
+    els.reviewForm.addEventListener("submit", (event) => {
+      event.preventDefault();
 
-    saveReview({
-      eventId: els.reviewEvent.value,
-      rating: Number(els.reviewRating.value),
-      text: els.reviewText.value.trim(),
-      visited: els.reviewVisited.checked,
-      authorId: state.user.uid,
-      authorName: state.user.displayName,
-      createdAt: new Date(),
-    })
-      .then(() => {
-        els.reviewForm.reset();
-        els.reviewVisited.checked = true;
+      saveReview({
+        eventId: els.reviewEvent.value,
+        rating: Number(els.reviewRating.value),
+        text: els.reviewText.value.trim(),
+        visited: els.reviewVisited.checked,
+        authorId: state.user.uid,
+        authorName: state.user.displayName,
+        createdAt: new Date(),
       })
-      .catch(onError);
-  });
+        .then(() => {
+          els.reviewForm.reset();
+          els.reviewVisited.checked = true;
+        })
+        .catch(onError);
+    });
+  }
 
-  els.photoForm.addEventListener("submit", (event) => {
-    event.preventDefault();
+  if (els.photoForm && els.photoFile) {
+    els.photoForm.addEventListener("submit", (event) => {
+      event.preventDefault();
 
-    const file = els.photoFile.files[0];
+      const file = els.photoFile.files[0];
+      if (!file) return;
 
-    const storagePath = `event-photos/${file.name}`;
+      const storagePath = `event-photos/${file.name}`;
 
-    uploadPhoto(file, storagePath)
-      .then((imageUrl) =>
-        savePhoto({
-          eventId: els.photoEvent.value,
-          caption: els.photoCaption.value.trim(),
-          imageUrl,
-          storagePath,
-          authorId: state.user.uid,
-          authorName: state.user.displayName,
-          createdAt: new Date(),
-        }),
-      )
-      .then(() => {
-        els.photoForm.reset();
-        updatePhotoPreview();
-      })
-      .catch(onError);
-  });
+      uploadPhoto(file, storagePath)
+        .then((imageUrl) =>
+          savePhoto({
+            eventId: els.photoEvent.value,
+            caption: els.photoCaption.value.trim(),
+            imageUrl,
+            storagePath,
+            authorId: state.user.uid,
+            authorName: state.user.displayName,
+            createdAt: new Date(),
+          }),
+        )
+        .then(() => {
+          els.photoForm.reset();
+          updatePhotoPreview();
+        })
+        .catch(onError);
+    });
+  }
 }
