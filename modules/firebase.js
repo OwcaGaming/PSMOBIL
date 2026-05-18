@@ -2,6 +2,7 @@ import { db } from "../firebase-config.js";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
@@ -55,6 +56,18 @@ export function setupFirebaseListeners() {
     state.photos = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
     renderAll();
   });
+}
+
+export async function deleteEvent(eventId) {
+  await deleteDoc(doc(db, "events", eventId));
+}
+
+export async function deleteReview(reviewId) {
+  await deleteDoc(doc(db, "reviews", reviewId));
+}
+
+export async function deletePhoto(photoId) {
+  await deleteDoc(doc(db, "photos", photoId));
 }
 
 export { addDoc, collection, Timestamp, GeoPoint, serverTimestamp };

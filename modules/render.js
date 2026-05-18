@@ -18,6 +18,107 @@ function createEl(tag, props = {}, ...children) {
   return el;
 }
 
+function showConfirmPopup({ title, message, confirmLabel = "Usuń", cancelLabel = "Anuluj" }) {
+  return new Promise((resolve) => {
+    const overlay = createEl("div", { class: "confirm-overlay", attrs: { role: "dialog", "aria-modal": "true" } });
+    const dialog = createEl("div", { class: "confirm-dialog card-surface" });
+    const heading = createEl("h3", { text: title });
+    const text = createEl("p", { class: "muted-text", text: message });
+
+    const cancelBtn = createEl(
+      "button",
+      {
+        class: "btn-soft",
+        attrs: { type: "button" },
+        on: { click: () => close(false) },
+      },
+      cancelLabel,
+    );
+
+    const confirmBtn = createEl(
+      "button",
+      {
+        class: "btn-soft btn-danger",
+        attrs: { type: "button" },
+        on: { click: () => close(true) },
+      },
+      confirmLabel,
+    );
+
+    const actions = createEl("div", { class: "confirm-actions" }, cancelBtn, confirmBtn);
+    dialog.append(heading, text, actions);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        close(false);
+      }
+    };
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        close(false);
+      }
+    });
+
+    document.addEventListener("keydown", onKeyDown);
+    confirmBtn.focus();
+
+    function close(result) {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      overlay.remove();
+      resolve(result);
+    }
+  });
+}
+
+async function handleDeleteEvent(event) {
+  const confirmed = await showConfirmPopup({
+    title: "Usuń wydarzenie",
+    message: `Czy na pewno chcesz usunąć "${event.Title}"? Ta akcja jest nieodwracalna.`,
+    confirmLabel: "Usuń",
+  });
+
+  if (!confirmed) return;
+
+  import("./firebase.js").then((m) => {
+    m.deleteEvent(event.id).catch((error) => console.error("Błąd przy usuwaniu wydarzenia:", error));
+  });
+}
+
+async function handleDeleteReview(review) {
+  const confirmed = await showConfirmPopup({
+    title: "Usuń opinię",
+    message: "Czy na pewno chcesz usunąć tę opinię? Ta akcja jest nieodwracalna.",
+    confirmLabel: "Usuń",
+  });
+
+  if (!confirmed) return;
+
+  import("./firebase.js").then((m) => {
+    m.deleteReview(review.id).catch((error) => console.error("Błąd przy usuwaniu opinii:", error));
+  });
+}
+
+async function handleDeletePhoto(photo) {
+  const confirmed = await showConfirmPopup({
+    title: "Usuń zdjęcie",
+    message: "Czy na pewno chcesz usunąć to zdjęcie? Ta akcja jest nieodwracalna.",
+    confirmLabel: "Usuń",
+  });
+
+  if (!confirmed) return;
+
+  import("./firebase.js").then((m) => {
+    m.deletePhoto(photo.id).catch((error) => console.error("Błąd przy usuwaniu zdjęcia:", error));
+  });
+}
+
 export function renderEventOptions() {
   els.reviewEvent.innerHTML = "";
   els.photoEvent.innerHTML = "";
@@ -108,14 +209,30 @@ function buildEventCard(event) {
   const reviewList = createEl("div");
   if (reviews.length) {
     reviews.forEach((review) => {
+      const reviewDeleteBtn = state.user.uid === review.authorId && state.user.uid !== "guest"
+        ? createEl("button", {
+            class: "btn-soft btn-delete",
+            attrs: { type: "button", title: "Usuń opinię" },
+            on: { click: () => handleDeleteReview(review) },
+          }, createEl("i", { class: "bi bi-trash" }))
+        : null;
+
       const rev = createEl("article", { class: "event-review" },
-        createEl("div", { class: "event-review-top" }, createEl("strong", { text: review.authorName || "Anonim" }), createEl("span", { class: "badge-inline", text: `${review.rating}/5` })),
+        createEl("div", { class: "event-review-top" }, createEl("strong", { text: review.authorName || "Anonim" }), createEl("span", { class: "badge-inline", text: `${review.rating}/5` }), reviewDeleteBtn),
         createEl("p", { class: "mb-1", text: review.text }),
         createEl("small", { class: "muted-text", text: review.visited ? "Uczestnik wydarzenia" : "Opinia zdalna" }),
       );
       reviewList.appendChild(rev);
     });
   } 
+
+  const deleteBtn = state.user.uid === event.authorId && state.user.uid !== "guest"
+    ? createEl("button", {
+        class: "btn-soft btn-delete",
+        attrs: { type: "button", title: "Usuń wydarzenie" },
+        on: { click: () => handleDeleteEvent(event) },
+      }, createEl("i", { class: "bi bi-trash" }))
+    : null;
 
   const card = createEl(
     "article",
@@ -125,7 +242,7 @@ function buildEventCard(event) {
     createEl("div", { class: "event-meta" }, createEl("span", {}, createEl("i", { class: "bi bi-calendar-event" }), ` ${formatDate(getEventDate(event.eventDate))}`)),
     createEl("p", { class: "mb-0", text: event.description }),
     createEl("div", { class: "pill-row" }, ...(tags.length ? tags : ["wydarzenie"]).map((t) => createEl("span", { class: "pill", text: t }))),
-    createEl("div", { class: "event-actions" }, reviewBtn, favBtn),
+    createEl("div", { class: "event-actions" }, reviewBtn, favBtn, deleteBtn),
     createEl("div", { class: "event-reviews" }, createEl("div", { class: "event-reviews-head" }, createEl("strong", { text: "Opinie" }), createEl("span", { class: "muted-text", text: `${reviewCount} ${reviewCount === 1 ? "opinia" : "opinii"}` })), reviewList)
   );
 
@@ -191,7 +308,16 @@ export function renderReviews() {
 
   latest.forEach((review) => {
     const event = eventById.get(review.eventId);
-    const head = createEl("div", { class: "review-head" }, createEl("strong", { text: review.authorName || "Anonim" }), createEl("span", { class: "badge-inline", text: `${review.rating}/5` }));
+    
+    const reviewDeleteBtn = state.user.uid === review.authorId && state.user.uid !== "guest"
+      ? createEl("button", {
+          class: "btn-soft btn-delete",
+          attrs: { type: "button", title: "Usuń opinię" },
+          on: { click: () => handleDeleteReview(review) },
+        }, createEl("i", { class: "bi bi-trash" }))
+      : null;
+    
+    const head = createEl("div", { class: "review-head" }, createEl("strong", { text: review.authorName || "Anonim" }), createEl("span", { class: "badge-inline", text: `${review.rating}/5` }), reviewDeleteBtn);
     const titleDiv = createEl("div", { class: "muted-text mb-2", text: event ? event.Title : "Nieznane wydarzenie" });
     const p = createEl("p", { class: "mb-2", text: review.text });
     const small = createEl("small", { class: "muted-text", text: `${review.visited ? "Uczestnik wydarzenia" : "Opinia zdalna"}${review.createdAt?.toDate ? ` • ${formatDate(review.createdAt.toDate())}` : ""}` });
@@ -213,7 +339,16 @@ export function renderPhotos() {
 
   latest.forEach((photo) => {
     const event = eventById.get(photo.eventId);
-    const card = createEl("article", { class: "photo-card" }, createEl("div", { class: "photo-head" }, createEl("strong", { text: photo.authorName || "Anonim" }), createEl("span", { class: "badge-inline", html: `<i class=\"bi bi-image\"></i> ${event ? event.Title : "Zdjęcie"}` })), createEl("p", { class: "muted-text mb-2", text: photo.caption }), createEl("img", { attrs: { src: photo.imageUrl, alt: `Zdjęcie z wydarzenia ${event ? event.Title : ""}` } }));
+    
+    const photoDeleteBtn = state.user.uid === photo.authorId && state.user.uid !== "guest"
+      ? createEl("button", {
+          class: "btn-soft btn-delete",
+          attrs: { type: "button", title: "Usuń zdjęcie" },
+          on: { click: () => handleDeletePhoto(photo) },
+        }, createEl("i", { class: "bi bi-trash" }))
+      : null;
+    
+    const card = createEl("article", { class: "photo-card" }, createEl("div", { class: "photo-head" }, createEl("strong", { text: photo.authorName || "Anonim" }), createEl("span", { class: "badge-inline", html: `<i class=\"bi bi-image\"></i> ${event ? event.Title : "Zdjęcie"}` }), photoDeleteBtn), createEl("p", { class: "muted-text mb-2", text: photo.caption }), createEl("img", { attrs: { src: photo.imageUrl, alt: `Zdjęcie z wydarzenia ${event ? event.Title : ""}` } }));
     els.photosList.appendChild(card);
   });
 }

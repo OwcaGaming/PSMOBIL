@@ -2,6 +2,7 @@ export const els = {
   installBar: document.getElementById("installBar"),
   installBtn: document.getElementById("installBtn"),
   dismissInstallBtn: document.getElementById("dismissInstallBtn"),
+  authPanel: document.querySelector(".auth-panel"),
   userChip: document.getElementById("userChip"),
   authHint: document.getElementById("authHint"),
   loginForm: document.getElementById("login_form"),

@@ -407,6 +407,57 @@ button {
   color: #ffd7d7;
 }
 
+.btn-delete {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 12px;
+  color: #ffd7d7;
+  background: rgba(248, 113, 113, 0.14);
+}
+
+.btn-delete:hover {
+  background: rgba(248, 113, 113, 0.22);
+}
+
+.btn-danger {
+  background: rgba(248, 113, 113, 0.2);
+  color: #ffd7d7;
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(3, 8, 13, 0.72);
+}
+
+.confirm-dialog {
+  width: min(100%, 420px);
+  border-radius: 22px;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.confirm-dialog h3 {
+  margin: 0;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+}
+
+.confirm-dialog p {
+  margin: 0;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .favorite-item {
   display: flex;
   align-items: center;

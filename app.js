@@ -10,13 +10,22 @@ function initialize() {
   setupHandlers();
 
   onAuthStateChangedListener((user) => {
+    const isLoggedIn = Boolean(user);
     const loggedUser = user
       ? { uid: user.uid, email: user.email, displayName: user.displayName || user.email }
       : { uid: "guest", email: "Gość", displayName: "Gość" };
 
     state.user = loggedUser;
     els.userChip.textContent = loggedUser.displayName;
-    els.authHint.textContent = user ? "Zalogowano" : "Zaloguj się, żeby dodawać wydarzenia";
+    els.authHint.textContent = isLoggedIn ? "Zalogowano":
+
+    if (els.authPanel) {
+      els.authPanel.classList.toggle("hidden", isLoggedIn);
+    }
+
+    if (els.logoutBtn) {
+      els.logoutBtn.classList.toggle("hidden", !isLoggedIn);
+    }
   });
 
   setupFirebaseListeners();
