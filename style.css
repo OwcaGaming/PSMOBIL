@@ -256,6 +256,17 @@ button {
   font-size: 0.84rem;
 }
 
+.photo-stack {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.photo-stack .card-form {
+  width: 100%;
+  max-width: 500px;
+}
+
 .photo-preview {
   width: 100%;
   aspect-ratio: 4 / 3;

@@ -39,10 +39,9 @@
     <main class="app-shell">
       <header class="hero card-surface">
         <div class="hero-copy">
-          <p class="eyebrow">PWA • SPA • Firebase</p>
           <h1>BędęTam</h1>
           <p class="hero-text">
-            Aplikacja do dzielenia się wydarzeniami w okolicy, z mapą, opiniami i zdjęciami z wyjść.
+            Aplikacja do dzielenia się wydarzeniami w okolicy.
           </p>
         </div>
         <div class="hero-badge">
@@ -132,7 +131,7 @@
           </label>
           <label class="field">
             <span>Twoja opinia</span>
-            <textarea id="review_text" rows="4" required placeholder="Co było dobre, co można poprawić?"></textarea>
+            <textarea id="review_text" rows="4" required placeholder="Jak wrażenia?"></textarea>
           </label>
           <label class="toggle-row">
             <input id="review_visited" type="checkbox" checked />
@@ -217,13 +216,9 @@
       <section class="view" id="view-relations" data-view>
         <div class="section-head">
           <h2>Zdjęcia wydarzeń</h2>
-          <span class="section-note-inline">Feed zdjęć w stylu social media.</span>
         </div>
 
-    
-        </div>
-
-        <div class="split-stack photo-stack">
+        <div class="photo-stack">
           <form id="photo_form" class="card-form auth-required">
             <h3>Dodaj zdjęcie</h3>
             <label class="field">
@@ -235,7 +230,7 @@
               <input id="photo_caption" type="text" required placeholder="np. Scena przed koncertem" />
             </label>
             <label class="field">
-              <span>Plik zdjęcia</span>
+              <span>Plik zdjęcia lub zrób zdjęcie</span>
               <input id="photo_file" class="file-input" type="file" accept="image/*" capture="environment" required />
             </label>
             <img id="photo_preview" class="photo-preview hidden" alt="Podgląd wybranego zdjęcia" />
